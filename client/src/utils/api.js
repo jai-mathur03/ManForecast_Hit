@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Set base URL for all axios requests
-axios.defaults.baseURL = 'http://localhost:5000';
+axios.defaults.baseURL = 'https://manforecast-hit.onrender.com';
 
 // Only set request interceptor for adding token
 // (Auth error handling is now in AuthContext)
