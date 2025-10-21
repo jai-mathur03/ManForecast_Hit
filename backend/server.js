@@ -1,47 +1,70 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
+const compression = require('compression');
+const helmet = require('helmet');
 require('dotenv').config();
 
-// Import your existing routes
+// ----- Routes you already have -----
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const departmentRoutes = require('./routes/departments');
 const forecastRoutes = require('./routes/forecasts');
 const reportRoutes = require('./routes/reports');
 
-// Import reminder system
+// Reminder system you already have
 const reminderSystem = require('./utils/reminderSystem');
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Basic hardening & gzip
+app.use(helmet());
+app.use(compression());
 
-// Routes
+// JSON & CORS
+app.use(express.json());
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      process.env.FRONTEND_URL // optional for preview deployments
+    ].filter(Boolean),
+    credentials: true,
+  })
+);
+
+// ---- API routes (unchanged) ----
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/forecasts', forecastRoutes);
 app.use('/api/reports', reportRoutes);
 
-// Connect to MongoDB and start reminder system
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => {
-  console.log('✅ Connected to MongoDB');
-  
-  // Start the reminder system after successful DB connection
-  reminderSystem.startReminderJobs();
-})
-.catch((err) => {
-  console.error('❌ MongoDB connection error:', err);
+// ---- Mongo connect + reminder jobs ----
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => {
+    console.log('✅ Connected to MongoDB');
+    reminderSystem.startReminderJobs();
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB connection error:', err);
+  });
+
+// ---- Serve React build from ../client/build ----
+const clientBuildPath = path.resolve(__dirname, '../client/build');
+app.use(express.static(clientBuildPath));
+
+// For any non-API route, return index.html (React Router support)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
-// Graceful shutdown
+// ---- Graceful shutdown ----
 process.on('SIGINT', () => {
   console.log('\n🔄 Shutting down gracefully...');
   reminderSystem.stopReminderJobs();
@@ -52,6 +75,4 @@ process.on('SIGINT', () => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));
